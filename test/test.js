@@ -271,6 +271,15 @@ describe( 'rollup-plugin-commonjs', () => {
 			assert.equal( (await executeBundle( bundle )).exports, 42 );
 		});
 
+		it( 'converts a CommonJS module with file extension wildcards', async () => {
+			const bundle = await rollup({
+				input: 'samples/extension/main.gif',
+				plugins: [ commonjs({ extensions: ['.gif*' ]}) ]
+			});
+
+			assert.equal( (await executeBundle( bundle )).exports, 'coo sauce' );
+		});
+
 		it( 'identifies named exports from object literals', async () => {
 			const bundle = await rollup({
 				input: 'samples/named-exports-from-object-literal/main.js',

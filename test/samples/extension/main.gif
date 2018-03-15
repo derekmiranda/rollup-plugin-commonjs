@@ -1,0 +1,2 @@
+var coo = require('./script.gif?attr=true')
+module.exports = coo + ' sauce'

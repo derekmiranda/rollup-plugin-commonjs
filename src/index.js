@@ -2,59 +2,62 @@ import { statSync } from 'fs';
 import { dirname, extname, resolve, sep } from 'path';
 import { sync as nodeResolveSync } from 'resolve';
 import { createFilter } from 'rollup-pluginutils';
+import { isMatch } from 'micromatch';
 import { EXTERNAL, PREFIX, HELPERS_ID, HELPERS } from './helpers.js';
 import defaultResolver from './defaultResolver.js';
-import { checkFirstpass, checkEsModule, transformCommonjs } from './transform.js';
+import {
+	checkFirstpass,
+	checkEsModule,
+	transformCommonjs
+} from './transform.js';
 import { getName } from './utils.js';
 
-function getCandidatesForExtension ( resolved, extension ) {
-	return [
-		resolved + extension,
-		resolved + `${sep}index${extension}`
-	];
+function getCandidatesForExtension (resolved, extension) {
+	return [resolved + extension, resolved + `${sep}index${extension}`];
 }
 
-function getCandidates ( resolved, extensions ) {
+function getCandidates (resolved, extensions) {
 	return extensions.reduce(
-		( paths, extension ) => paths.concat( getCandidatesForExtension ( resolved, extension ) ),
+		(paths, extension) =>
+			paths.concat(getCandidatesForExtension(resolved, extension)),
 		[resolved]
 	);
 }
 
 // Return the first non-falsy result from an array of
 // maybe-sync, maybe-promise-returning functions
-function first ( candidates ) {
-	return function ( ...args ) {
-		return candidates.reduce( ( promise, candidate ) => {
-			return promise.then( result => result != null ?
-				result :
-				Promise.resolve( candidate( ...args ) ) );
-		}, Promise.resolve() );
+function first (candidates) {
+	return function (...args) {
+		return candidates.reduce((promise, candidate) => {
+			return promise.then(
+				result =>
+					result != null ? result : Promise.resolve(candidate(...args))
+			);
+		}, Promise.resolve());
 	};
 }
 
-function startsWith ( str, prefix ) {
-	return str.slice( 0, prefix.length ) === prefix;
+function startsWith (str, prefix) {
+	return str.slice(0, prefix.length) === prefix;
 }
 
-
-export default function commonjs ( options = {} ) {
+export default function commonjs (options = {}) {
 	const extensions = options.extensions || ['.js'];
-	const filter = createFilter( options.include, options.exclude );
+	const filter = createFilter(options.include, options.exclude);
 	const ignoreGlobal = options.ignoreGlobal;
 
 	const customNamedExports = {};
-	if ( options.namedExports ) {
-		Object.keys( options.namedExports ).forEach( id => {
+	if (options.namedExports) {
+		Object.keys(options.namedExports).forEach(id => {
 			let resolvedId;
 
 			try {
-				resolvedId = nodeResolveSync( id, { basedir: process.cwd() });
-			} catch ( err ) {
-				resolvedId = resolve( id );
+				resolvedId = nodeResolveSync(id, { basedir: process.cwd() });
+			} catch (err) {
+				resolvedId = resolve(id);
 			}
 
-			customNamedExports[ resolvedId ] = options.namedExports[ id ];
+			customNamedExports[resolvedId] = options.namedExports[id];
 		});
 	}
 
@@ -62,28 +65,31 @@ export default function commonjs ( options = {} ) {
 
 	const allowDynamicRequire = !!options.ignore; // TODO maybe this should be configurable?
 
-	const ignoreRequire = typeof options.ignore === 'function' ?
-		options.ignore :
-		Array.isArray( options.ignore ) ? id => ~options.ignore.indexOf( id ) :
-			() => false;
+	const ignoreRequire =
+		typeof options.ignore === 'function'
+			? options.ignore
+			: Array.isArray(options.ignore)
+				? id => ~options.ignore.indexOf(id)
+				: () => false;
 
 	let entryModuleIdsPromise = null;
 
-	function resolveId ( importee, importer ) {
-		if ( importee === HELPERS_ID ) return importee;
+	function resolveId (importee, importer) {
+		if (importee === HELPERS_ID) return importee;
 
-		if ( importer && startsWith( importer, PREFIX ) ) importer = importer.slice( PREFIX.length );
+		if (importer && startsWith(importer, PREFIX))
+			importer = importer.slice(PREFIX.length);
 
-		const isProxyModule = startsWith( importee, PREFIX );
-		if ( isProxyModule ) importee = importee.slice( PREFIX.length );
+		const isProxyModule = startsWith(importee, PREFIX);
+		if (isProxyModule) importee = importee.slice(PREFIX.length);
 
-		return resolveUsingOtherResolvers( importee, importer ).then( resolved => {
-			if ( resolved ) return isProxyModule ? PREFIX + resolved : resolved;
+		return resolveUsingOtherResolvers(importee, importer).then(resolved => {
+			if (resolved) return isProxyModule ? PREFIX + resolved : resolved;
 
-			resolved = defaultResolver( importee, importer );
+			resolved = defaultResolver(importee, importer);
 
-			if ( isProxyModule ) {
-				if ( resolved ) return PREFIX + resolved;
+			if (isProxyModule) {
+				if (resolved) return PREFIX + resolved;
 				return EXTERNAL + importee; // external
 			}
 
@@ -99,93 +105,120 @@ export default function commonjs ( options = {} ) {
 	return {
 		name: 'commonjs',
 
-		options ( options ) {
-			const resolvers = ( options.plugins || [] )
-				.map( plugin => {
-					if ( plugin.resolveId === resolveId ) {
+		options (options) {
+			const resolvers = (options.plugins || [])
+				.map(plugin => {
+					if (plugin.resolveId === resolveId) {
 						// substitute CommonJS resolution logic
-						return ( importee, importer ) => {
-							if ( importee[0] !== '.' || !importer ) return; // not our problem
+						return (importee, importer) => {
+							if (importee[0] !== '.' || !importer) return; // not our problem
 
-							const resolved = resolve( dirname( importer ), importee );
-							const candidates = getCandidates( resolved, extensions );
+							const resolved = resolve(dirname(importer), importee);
+							const candidates = getCandidates(resolved, extensions);
 
-							for ( let i = 0; i < candidates.length; i += 1 ) {
+							for (let i = 0; i < candidates.length; i += 1) {
 								try {
-									const stats = statSync( candidates[i] );
-									if ( stats.isFile() ) return candidates[i];
-								} catch ( err ) { /* noop */ }
+									const stats = statSync(candidates[i]);
+									if (stats.isFile()) return candidates[i];
+								} catch (err) {
+									/* noop */
+								}
 							}
 						};
 					}
 
 					return plugin.resolveId;
 				})
-				.filter( Boolean );
+				.filter(Boolean);
 
-			const isExternal = id => options.external ?
-				Array.isArray( options.external ) ? ~options.external.indexOf( id ) :
-					options.external(id) :
-				false;
+			const isExternal = id =>
+				options.external
+					? Array.isArray(options.external)
+						? ~options.external.indexOf(id)
+						: options.external(id)
+					: false;
 
-			resolvers.unshift( id => isExternal( id ) ? false : null );
+			resolvers.unshift(id => (isExternal(id) ? false : null));
 
-			resolveUsingOtherResolvers = first( resolvers );
+			resolveUsingOtherResolvers = first(resolvers);
 
-			const entryModules = [].concat( options.input || options.entry );
+			const entryModules = [].concat(options.input || options.entry);
 			entryModuleIdsPromise = Promise.all(
-				entryModules.map( entry => resolveId( entry ))
+				entryModules.map(entry => resolveId(entry))
 			);
 		},
 
 		resolveId,
 
-		load ( id ) {
-			if ( id === HELPERS_ID ) return HELPERS;
+		load (id) {
+			if (id === HELPERS_ID) return HELPERS;
 
 			// generate proxy modules
-			if ( startsWith( id, EXTERNAL ) ) {
-				const actualId = id.slice( EXTERNAL.length );
-				const name = getName( actualId );
+			if (startsWith(id, EXTERNAL)) {
+				const actualId = id.slice(EXTERNAL.length);
+				const name = getName(actualId);
 
-				return `import ${name} from ${JSON.stringify( actualId )}; export default ${name};`;
+				return `import ${name} from ${JSON.stringify(
+					actualId
+				)}; export default ${name};`;
 			}
 
-			if ( startsWith( id, PREFIX ) ) {
-				const actualId = id.slice( PREFIX.length );
-				const name = getName( actualId );
+			if (startsWith(id, PREFIX)) {
+				const actualId = id.slice(PREFIX.length);
+				const name = getName(actualId);
 
-				if (commonjsModules.has( actualId ))
-					return `import { __moduleExports } from ${JSON.stringify( actualId )}; export default __moduleExports;`;
+				if (commonjsModules.has(actualId))
+					return `import { __moduleExports } from ${JSON.stringify(
+						actualId
+					)}; export default __moduleExports;`;
 				else if (esModulesWithoutDefaultExport.indexOf(actualId) !== -1)
-					return `import * as ${name} from ${JSON.stringify( actualId )}; export default ${name};`;
+					return `import * as ${name} from ${JSON.stringify(
+						actualId
+					)}; export default ${name};`;
 				else
-					return `import * as ${name} from ${JSON.stringify( actualId )}; export default ( ${name} && ${name}['default'] ) || ${name};`;
+					return `import * as ${name} from ${JSON.stringify(
+						actualId
+					)}; export default ( ${name} && ${name}['default'] ) || ${name};`;
 			}
 		},
 
-		transform ( code, id ) {
-			if ( !filter( id ) ) return null;
-			if ( extensions.indexOf( extname( id ) ) === -1 ) return null;
+		transform (code, id) {
+			if (!filter(id)) return null;
+			if (
+				!extensions.some(ext => {
+					const idExt = extname(id);
+					return isMatch(idExt, ext);
+				})
+			)
+				return null;
 
-			return entryModuleIdsPromise.then( (entryModuleIds) => {
-				const {isEsModule, hasDefaultExport, ast} = checkEsModule( code, id );
-				if ( isEsModule ) {
-					if ( !hasDefaultExport )
-						esModulesWithoutDefaultExport.push( id );
+			return entryModuleIdsPromise.then(entryModuleIds => {
+				const { isEsModule, hasDefaultExport, ast } = checkEsModule(code, id);
+				if (isEsModule) {
+					if (!hasDefaultExport) esModulesWithoutDefaultExport.push(id);
 					return;
 				}
 
 				// it is not an ES module but not a commonjs module, too.
-				if ( !checkFirstpass( code, ignoreGlobal ) ) {
-					esModulesWithoutDefaultExport.push( id );
+				if (!checkFirstpass(code, ignoreGlobal)) {
+					esModulesWithoutDefaultExport.push(id);
 					return;
 				}
 
-				const transformed = transformCommonjs( code, id, entryModuleIds.indexOf(id) !== -1, ignoreGlobal, ignoreRequire, customNamedExports[ id ], sourceMap, allowDynamicRequire, ast );
-				if ( !transformed ) return;
+				const transformed = transformCommonjs(
+					code,
+					id,
+					entryModuleIds.indexOf(id) !== -1,
+					ignoreGlobal,
+					ignoreRequire,
+					customNamedExports[id],
+					sourceMap,
+					allowDynamicRequire,
+					ast
+				);
+				if (!transformed) return;
 
-				commonjsModules.set( id, true );
+				commonjsModules.set(id, true);
 				return transformed;
 			});
 		}
