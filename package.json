@@ -1,11 +1,15 @@
 {
   "name": "rollup-plugin-commonjs",
+  "publishConfig": {
+    "access": "public"
+  },
   "version": "8.4.1",
   "description": "Convert CommonJS modules to ES2015",
   "main": "dist/rollup-plugin-commonjs.cjs.js",
   "module": "dist/rollup-plugin-commonjs.es.js",
   "jsnext:main": "dist/rollup-plugin-commonjs.es.js",
   "scripts": {
+    "pub": "np",
     "test": "npm run test:only",
     "test:only": "mocha",
     "pretest": "npm run build",
@@ -32,6 +36,7 @@
     "eslint": "^4.8.0",
     "locate-character": "^2.0.1",
     "mocha": "^4.0.1",
+    "np": "^3.0.4",
     "require-relative": "^0.8.7",
     "rollup": "^0.55.0",
     "rollup-plugin-buble": "^0.16.0",
@@ -40,7 +45,10 @@
     "source-map": "^0.6.1",
     "source-map-support": "^0.5.0"
   },
-  "repository": "rollup/rollup-plugin-commonjs",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/ff0000-ad-tech/rollup-plugin-commonjs.git"
+  },
   "author": "Rich Harris",
   "license": "MIT",
   "bugs": {
