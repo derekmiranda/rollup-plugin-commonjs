@@ -3,7 +3,7 @@
   "publishConfig": {
     "access": "public"
   },
-  "version": "8.4.1",
+  "version": "8.4.2",
   "description": "Convert CommonJS modules to ES2015",
   "main": "dist/rollup-plugin-commonjs.cjs.js",
   "module": "dist/rollup-plugin-commonjs.es.js",
