@@ -1,5 +1,5 @@
 {
-  "name": "rollup-plugin-commonjs",
+  "name": "@ff0000-ad-tech/rollup-plugin-commonjs",
   "publishConfig": {
     "access": "public"
   },
